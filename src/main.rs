@@ -9,9 +9,10 @@ fn main() {
         panic!("{}: invalid number of arguments", args[0]);
     }
 
-    let tokens = tokenize(&args[1]);
-    let node = parse(tokens);
-    codegen(node);
+    let tokens = tokenize::tokenize(&args[1]);
 
-    return 0;
+    println!("{:?}", &tokens);
+
+    //let node = parse(tokens);
+    //codegen(node);
 }
