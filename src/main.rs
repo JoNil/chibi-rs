@@ -1,6 +1,6 @@
 mod codegen;
-mod parse;
-mod tokenize;
+mod parser;
+mod tokenizer;
 
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
@@ -9,10 +9,13 @@ fn main() {
         panic!("{}: invalid number of arguments", args[0]);
     }
 
-    let tokens = tokenize::tokenize(&args[1]);
+    let tokens = tokenizer::tokenize(&args[1]);
 
     println!("{:?}", &tokens);
 
-    //let node = parse(tokens);
+    let node = parser::parse(&tokens);
+
+    println!("{:?}", &node);
+
     //codegen(node);
 }

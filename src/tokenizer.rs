@@ -1,13 +1,7 @@
 #[derive(Debug)]
-pub enum TokenKind {
-    Punct,
+pub enum Token<'a> {
+    Punct(&'a str),
     Num(i32),
-}
-
-#[derive(Debug)]
-pub struct Token<'a> {
-    pub kind: TokenKind,
-    pub location: &'a str,
 }
 
 fn get_number(p: &str) -> &str {
@@ -38,21 +32,14 @@ pub fn tokenize<'a>(input: &'a str) -> Vec<Token<'a>> {
 
         if next.is_ascii_digit() {
             let number_str = get_number(p);
-            let number = number_str.parse::<i32>().unwrap();
-            tokens.push(Token {
-                kind: TokenKind::Num(number),
-                location: number_str,
-            });
+            tokens.push(Token::Num(number_str.parse::<i32>().unwrap()));
             p = &p[number_str.len()..];
             continue;
         }
 
         let punct_len = read_punct(p);
         if punct_len > 0 {
-            tokens.push(Token {
-                kind: TokenKind::Punct,
-                location: &p[..punct_len],
-            });
+            tokens.push(Token::Punct(&p[..punct_len]));
             p = &p[punct_len..];
             continue;
         }
