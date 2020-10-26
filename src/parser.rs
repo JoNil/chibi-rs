@@ -1,154 +1,130 @@
 use crate::tokenizer::Token;
 
 #[derive(Debug)]
-pub enum AstNode {
-    Add(Node, Node),
-    Sub(Node, Node),
-    Mul(Node, Node),
-    Div(Node, Node),
-    Neg(Node),
-    Eq(Node, Node),
-    Ne(Node, Node),
-    Lt(Node, Node),
-    Le(Node, Node),
+pub enum Node {
+    Add(Box<Node>, Box<Node>),
+    Sub(Box<Node>, Box<Node>),
+    Mul(Box<Node>, Box<Node>),
+    Div(Box<Node>, Box<Node>),
+    Neg(Box<Node>),
+    Eq(Box<Node>, Box<Node>),
+    Ne(Box<Node>, Box<Node>),
+    Lt(Box<Node>, Box<Node>),
+    Le(Box<Node>, Box<Node>),
     Num(i32),
 }
 
-pub type Node = Box<AstNode>;
-
-fn is_op(tokens: &[Token], op: &str) -> bool {
-    if let [Token::Punct(s), ..] = tokens {
+fn is_op(rest: &[Token], op: &str) -> bool {
+    if let [Token::Punct(s), ..] = rest {
         *s == op
     } else {
         false
     }
 }
 
-fn new_node<'a>(
-    new_node: impl FnOnce(Node) -> AstNode,
-    nt: (Node, &'a [Token<'a>]),
-) -> (Node, &'a [Token<'a>]) {
-    (Box::new(new_node(nt.0)), nt.1)
+type NodeAndRest<'a> = (Box<Node>, &'a [Token<'a>]);
+
+fn new_node(new_node: impl FnOnce(Box<Node>) -> Node, nr: NodeAndRest) -> NodeAndRest {
+    (Box::new(new_node(nr.0)), nr.1)
 }
 
 // expr = equality
-fn expr<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    equality(tokens)
+fn expr<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    equality(rest)
 }
 
-// equality = relational ("==" relational | "!=" relational)*
-fn equality<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    let (mut node, mut tokens) = relational(tokens);
+// equality = cmp ("==" cmp | "!=" cmp)*
+fn equality<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    let (mut node, mut rest) = cmp(rest);
 
     loop {
-        let nt = match tokens {
-            [Token::Punct("=="), ..] => {
-                new_node(move |rhs| AstNode::Eq(node, rhs), relational(&tokens[1..]))
-            }
-            [Token::Punct("!="), ..] => {
-                new_node(move |rhs| AstNode::Ne(node, rhs), relational(&tokens[1..]))
-            }
+        let nr = match rest {
+            [Token::Punct("=="), ..] => new_node(move |rhs| Node::Eq(node, rhs), cmp(&rest[1..])),
+            [Token::Punct("!="), ..] => new_node(move |rhs| Node::Ne(node, rhs), cmp(&rest[1..])),
             _ => {
-                return (node, tokens);
+                return (node, rest);
             }
         };
 
-        node = nt.0;
-        tokens = nt.1;
+        node = nr.0;
+        rest = nr.1;
     }
 }
 
-// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-fn relational<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    let (mut node, mut tokens) = add(tokens);
+// cmp = add ("<" add | "<=" add | ">" add | ">=" add)*
+fn cmp<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    let (mut node, mut rest) = add(rest);
 
     loop {
-        let nt = match tokens {
-            [Token::Punct("<"), ..] => {
-                new_node(move |rhs| AstNode::Lt(node, rhs), add(&tokens[1..]))
-            }
-            [Token::Punct("<="), ..] => {
-                new_node(move |rhs| AstNode::Le(node, rhs), add(&tokens[1..]))
-            }
-            [Token::Punct(">"), ..] => {
-                new_node(move |lhs| AstNode::Lt(lhs, node), add(&tokens[1..]))
-            }
-            [Token::Punct(">="), ..] => {
-                new_node(move |lhs| AstNode::Le(lhs, node), add(&tokens[1..]))
-            }
+        let nr = match rest {
+            [Token::Punct("<"), ..] => new_node(move |rhs| Node::Lt(node, rhs), add(&rest[1..])),
+            [Token::Punct("<="), ..] => new_node(move |rhs| Node::Le(node, rhs), add(&rest[1..])),
+            [Token::Punct(">"), ..] => new_node(move |lhs| Node::Lt(lhs, node), add(&rest[1..])),
+            [Token::Punct(">="), ..] => new_node(move |lhs| Node::Le(lhs, node), add(&rest[1..])),
             _ => {
-                return (node, tokens);
+                return (node, rest);
             }
         };
 
-        node = nt.0;
-        tokens = nt.1;
+        node = nr.0;
+        rest = nr.1;
     }
 }
 
 // add = mul ("+" mul | "-" mul)*
-fn add<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    let (mut node, mut tokens) = mul(tokens);
+fn add<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    let (mut node, mut rest) = mul(rest);
 
     loop {
-        let nt = match tokens {
-            [Token::Punct("+"), ..] => {
-                new_node(move |rhs| AstNode::Add(node, rhs), mul(&tokens[1..]))
-            }
-            [Token::Punct("-"), ..] => {
-                new_node(move |rhs| AstNode::Sub(node, rhs), mul(&tokens[1..]))
-            }
+        let nr = match rest {
+            [Token::Punct("+"), ..] => new_node(move |rhs| Node::Add(node, rhs), mul(&rest[1..])),
+            [Token::Punct("-"), ..] => new_node(move |rhs| Node::Sub(node, rhs), mul(&rest[1..])),
             _ => {
-                return (node, tokens);
+                return (node, rest);
             }
         };
 
-        node = nt.0;
-        tokens = nt.1;
+        node = nr.0;
+        rest = nr.1;
     }
 }
 
 // mul = unary ("*" unary | "/" unary)*
-fn mul<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    let (mut node, mut tokens) = unary(tokens);
+fn mul<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    let (mut node, mut rest) = unary(rest);
 
     loop {
-        let nt = match tokens {
-            [Token::Punct("*"), ..] => {
-                new_node(move |rhs| AstNode::Mul(node, rhs), unary(&tokens[1..]))
-            }
-            [Token::Punct("/"), ..] => {
-                new_node(move |rhs| AstNode::Div(node, rhs), unary(&tokens[1..]))
-            }
+        let nr = match rest {
+            [Token::Punct("*"), ..] => new_node(move |rhs| Node::Mul(node, rhs), unary(&rest[1..])),
+            [Token::Punct("/"), ..] => new_node(move |rhs| Node::Div(node, rhs), unary(&rest[1..])),
             _ => {
-                return (node, tokens);
+                return (node, rest);
             }
         };
 
-        node = nt.0;
-        tokens = nt.1;
+        node = nr.0;
+        rest = nr.1;
     }
 }
 
 // unary = ("+" | "-") unary
 //       | primary
-fn unary<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    if is_op(tokens, "+") {
-        return unary(&tokens[1..]);
+fn unary<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    if is_op(rest, "+") {
+        return unary(&rest[1..]);
     }
 
-    if is_op(tokens, "-") {
-        let (op, rest) = unary(&tokens[1..]);
-        return (Box::new(AstNode::Neg(op)), rest);
+    if is_op(rest, "-") {
+        return new_node(Node::Neg, unary(&rest[1..]));
     }
 
-    primary(tokens)
+    primary(rest)
 }
 
 // primary = "(" expr ")" | num
-fn primary<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
-    if is_op(tokens, "(") {
-        let (node, rest) = expr(&tokens[1..]);
+fn primary<'a>(rest: &'a [Token]) -> NodeAndRest<'a> {
+    if is_op(rest, "(") {
+        let (node, rest) = expr(&rest[1..]);
 
         if !is_op(rest, ")") {
             panic!("Expected: )");
@@ -157,15 +133,15 @@ fn primary<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
         return (node, &rest[1..]);
     }
 
-    if let Token::Num(num) = tokens[0] {
-        return (Box::new(AstNode::Num(num)), &tokens[1..]);
+    if let Token::Num(num) = rest[0] {
+        return (Box::new(Node::Num(num)), &rest[1..]);
     }
 
     panic!("expected an expression");
 }
 
-pub fn parse(tokens: &[Token]) -> Node {
-    let (node, rest) = expr(tokens);
+pub fn parse(rest: &[Token]) -> Box<Node> {
+    let (node, rest) = expr(rest);
 
     if !rest.is_empty() {
         panic!("Extra token");
@@ -178,14 +154,14 @@ pub fn parse(tokens: &[Token]) -> Node {
 mod test {
     #[test]
     fn test_parse() {
-        use super::{parse, AstNode};
+        use super::{parse, Node};
         use crate::tokenizer;
 
-        let tokens = tokenizer::tokenize("2+2");
+        let rest = tokenizer::tokenize("2+2");
 
-        let node = parse(&tokens);
+        let node = parse(&rest);
 
-        if let AstNode::Add(..) = *node {
+        if let Node::Add(..) = *node {
         } else {
             panic!("Fail");
         }
