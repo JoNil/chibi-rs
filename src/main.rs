@@ -1,8 +1,10 @@
+use std::{error::Error, fs};
+
 mod codegen;
 mod parser;
 mod tokenizer;
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().collect::<Vec<_>>();
 
     if args.len() != 2 {
@@ -17,5 +19,9 @@ fn main() {
 
     println!("{:?}", &node);
 
-    //codegen(node);
+    let asm = codegen::codegen(&node);
+
+    fs::write("tmp.s", asm)?;
+
+    Ok(())
 }
