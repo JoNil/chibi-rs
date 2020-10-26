@@ -24,6 +24,13 @@ fn is_op(tokens: &[Token], op: &str) -> bool {
     }
 }
 
+fn new_node<'a>(
+    new_node: impl FnOnce(Node) -> AstNode,
+    nt: (Node, &'a [Token<'a>]),
+) -> (Node, &'a [Token<'a>]) {
+    (Box::new(new_node(nt.0)), nt.1)
+}
+
 // expr = equality
 fn expr<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
     equality(tokens)
@@ -34,21 +41,20 @@ fn equality<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
     let (mut node, mut tokens) = relational(tokens);
 
     loop {
-        if is_op(tokens, "==") {
-            let (rhs, rest) = relational(&tokens[1..]);
-            node = Box::new(AstNode::Eq(node, rhs));
-            tokens = rest;
-            continue;
-        }
+        let nt = match tokens {
+            [Token::Punct("=="), ..] => {
+                new_node(move |rhs| AstNode::Eq(node, rhs), relational(&tokens[1..]))
+            }
+            [Token::Punct("!="), ..] => {
+                new_node(move |rhs| AstNode::Ne(node, rhs), relational(&tokens[1..]))
+            }
+            _ => {
+                return (node, tokens);
+            }
+        };
 
-        if is_op(tokens, "!=") {
-            let (rhs, rest) = relational(&tokens[1..]);
-            node = Box::new(AstNode::Ne(node, rhs));
-            tokens = rest;
-            continue;
-        }
-
-        return (node, tokens);
+        node = nt.0;
+        tokens = nt.1;
     }
 }
 
@@ -57,35 +63,26 @@ fn relational<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
     let (mut node, mut tokens) = add(tokens);
 
     loop {
-        if is_op(tokens, "<") {
-            let (rhs, rest) = add(&tokens[1..]);
-            node = Box::new(AstNode::Lt(node, rhs));
-            tokens = rest;
-            continue;
-        }
+        let nt = match tokens {
+            [Token::Punct("<"), ..] => {
+                new_node(move |rhs| AstNode::Lt(node, rhs), add(&tokens[1..]))
+            }
+            [Token::Punct("<="), ..] => {
+                new_node(move |rhs| AstNode::Le(node, rhs), add(&tokens[1..]))
+            }
+            [Token::Punct(">"), ..] => {
+                new_node(move |lhs| AstNode::Lt(lhs, node), add(&tokens[1..]))
+            }
+            [Token::Punct(">="), ..] => {
+                new_node(move |lhs| AstNode::Le(lhs, node), add(&tokens[1..]))
+            }
+            _ => {
+                return (node, tokens);
+            }
+        };
 
-        if is_op(tokens, "<=") {
-            let (rhs, rest) = add(&tokens[1..]);
-            node = Box::new(AstNode::Le(node, rhs));
-            tokens = rest;
-            continue;
-        }
-
-        if is_op(tokens, ">") {
-            let (lhs, rest) = add(&tokens[1..]);
-            node = Box::new(AstNode::Lt(lhs, node));
-            tokens = rest;
-            continue;
-        }
-
-        if is_op(tokens, ">=") {
-            let (lhs, rest) = add(&tokens[1..]);
-            node = Box::new(AstNode::Le(lhs, node));
-            tokens = rest;
-            continue;
-        }
-
-        return (node, tokens);
+        node = nt.0;
+        tokens = nt.1;
     }
 }
 
@@ -94,21 +91,20 @@ fn add<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
     let (mut node, mut tokens) = mul(tokens);
 
     loop {
-        if is_op(tokens, "+") {
-            let (rhs, rest) = mul(&tokens[1..]);
-            node = Box::new(AstNode::Add(node, rhs));
-            tokens = rest;
-            continue;
-        }
+        let nt = match tokens {
+            [Token::Punct("+"), ..] => {
+                new_node(move |rhs| AstNode::Add(node, rhs), mul(&tokens[1..]))
+            }
+            [Token::Punct("-"), ..] => {
+                new_node(move |rhs| AstNode::Sub(node, rhs), mul(&tokens[1..]))
+            }
+            _ => {
+                return (node, tokens);
+            }
+        };
 
-        if is_op(tokens, "-") {
-            let (rhs, rest) = mul(&tokens[1..]);
-            node = Box::new(AstNode::Sub(node, rhs));
-            tokens = rest;
-            continue;
-        }
-
-        return (node, tokens);
+        node = nt.0;
+        tokens = nt.1;
     }
 }
 
@@ -117,21 +113,20 @@ fn mul<'a>(tokens: &'a [Token]) -> (Node, &'a [Token<'a>]) {
     let (mut node, mut tokens) = unary(tokens);
 
     loop {
-        if is_op(tokens, "*") {
-            let (rhs, rest) = unary(&tokens[1..]);
-            node = Box::new(AstNode::Mul(node, rhs));
-            tokens = rest;
-            continue;
-        }
+        let nt = match tokens {
+            [Token::Punct("*"), ..] => {
+                new_node(move |rhs| AstNode::Mul(node, rhs), unary(&tokens[1..]))
+            }
+            [Token::Punct("/"), ..] => {
+                new_node(move |rhs| AstNode::Div(node, rhs), unary(&tokens[1..]))
+            }
+            _ => {
+                return (node, tokens);
+            }
+        };
 
-        if is_op(tokens, "/") {
-            let (rhs, rest) = unary(&tokens[1..]);
-            node = Box::new(AstNode::Div(node, rhs));
-            tokens = rest;
-            continue;
-        }
-
-        return (node, tokens);
+        node = nt.0;
+        tokens = nt.1;
     }
 }
 
