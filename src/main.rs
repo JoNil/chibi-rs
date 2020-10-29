@@ -1,6 +1,7 @@
 use std::{error::Error, fs};
 
 mod codegen;
+mod codegen_llvm;
 mod parser;
 mod tokenizer;
 
@@ -20,6 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}", &node);
 
     let asm = codegen::codegen(&node);
+    codegen_llvm::codegen(&node);
 
     fs::write("tmp.s", asm)?;
 
